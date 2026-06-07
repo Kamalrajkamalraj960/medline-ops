@@ -1,0 +1,26 @@
+node_modules/
+dist/
+.next/
+out/
+build/
+coverage/
+
+# env
+.env
+.env.local
+.env.*.local
+
+# logs
+*.log
+npm-debug.log*
+
+# os
+.DS_Store
+Thumbs.db
+
+# prisma
+packages/db/prisma/*.db
+packages/db/prisma/*.db-journal
+
+# TypeScript incremental build cache
+*.tsbuildinfo

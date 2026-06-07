@@ -1,0 +1,710 @@
+// Medline Ops — Prisma schema
+// Single source of truth for the data model.
+// CRITICAL BUSINESS RULE: ServiceType has NO "both" — only consultancy | academy.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------------------
+// ENUMS
+// ----------------------------------------------------------------------------
+
+/// The ONLY allowed service types. "both" is intentionally absent and must
+/// never be reintroduced. Legacy "both" rows are migrated to a flagged state
+/// via Lead.legacyBothFlag, not by adding an enum value.
+enum ServiceType {
+  consultancy
+  academy
+}
+
+enum RoleName {
+  SUPER_ADMIN
+  OPERATIONS_MANAGER
+  SALES_MANAGER
+  SALES_EXECUTIVE
+  DOCUMENTATION_TEAM
+  ACADEMY_HEAD
+  ACCOUNTS
+  MARKETING
+  CLIENT
+}
+
+enum DepartmentName {
+  ADMINISTRATION
+  OPERATIONS
+  SALES
+  DOCUMENTATION
+  ACADEMY
+  ACCOUNTS
+  MARKETING
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  INVITED
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  INTERESTED
+  DEMO_SCHEDULED
+  DEMO_COMPLETED
+  DOCUMENTATION
+  CONVERTED
+  LOST
+}
+
+enum Priority {
+  URGENT
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum Urgency {
+  IMMEDIATE
+  WITHIN_3_MONTHS
+  WITHIN_6_MONTHS
+  JUST_EXPLORING
+}
+
+enum TaskStatus {
+  NEW
+  ASSIGNED
+  IN_PROGRESS
+  BLOCKED
+  COMPLETED
+  CANCELLED
+}
+
+enum CaseStatus {
+  DOCUMENT_COLLECTION
+  VERIFICATION
+  READY_FOR_SUBMISSION
+  SUBMITTED
+  UNDER_REVIEW
+  ADDITIONAL_DOCS_REQUIRED
+  ELIGIBILITY_RECEIVED
+  EXAM_SCHEDULED
+  EXAM_PASSED
+  LICENSE_PROCESSING
+  COMPLETED
+  REJECTED
+  CLOSED
+  ARCHIVED
+}
+
+enum DocumentStatus {
+  MISSING
+  UPLOADED
+  UNDER_REVIEW
+  VERIFIED
+  REJECTED
+  EXPIRED
+  RESUBMISSION_REQUIRED
+}
+
+enum AuthorityStatus {
+  NOT_STARTED
+  SUBMITTED
+  UNDER_REVIEW
+  ADDITIONAL_DOCS_REQUESTED
+  ELIGIBILITY_ISSUED
+  EXAM_SCHEDULED
+  APPROVED
+  REJECTED
+  CLOSED
+}
+
+enum BatchStatus {
+  UPCOMING
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum StudentStatus {
+  ENROLLED
+  ACTIVE
+  COMPLETED
+  DROPPED
+  ON_HOLD
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  UPI
+  BANK_TRANSFER
+  CASH
+  ONLINE_GATEWAY
+  CHEQUE
+  CARD
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  PARTIALLY_PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum RefundStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PROCESSED
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  WHATSAPP
+  SMS
+  PUSH
+}
+
+// ----------------------------------------------------------------------------
+// IDENTITY, RBAC, ORG
+// ----------------------------------------------------------------------------
+
+model Role {
+  id          String           @id @default(cuid())
+  name        RoleName         @unique
+  label       String
+  description String?
+  users       User[]
+  permissions RolePermission[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  /// Format: "<resource>:<action>" e.g. "lead:create", "report:export"
+  key         String           @unique
+  resource    String
+  action      String
+  description String?
+  roles       RolePermission[]
+  createdAt   DateTime         @default(now())
+}
+
+model RolePermission {
+  id           String     @id @default(cuid())
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  roleId       String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  permissionId String
+
+  @@unique([roleId, permissionId])
+}
+
+model Department {
+  id        String         @id @default(cuid())
+  name      DepartmentName @unique
+  label     String
+  users     User[]
+  createdAt DateTime       @default(now())
+}
+
+model User {
+  id           String      @id @default(cuid())
+  name         String
+  email        String      @unique
+  username     String?     @unique
+  passwordHash String
+  status       UserStatus  @default(ACTIVE)
+  role         Role        @relation(fields: [roleId], references: [id])
+  roleId       String
+  department   Department? @relation(fields: [departmentId], references: [id])
+  departmentId String?
+  phone        String?
+  avatarUrl    String?
+  lastLoginAt  DateTime?
+
+  // For CLIENT portal users: the lead/application this user can self-service.
+  portalLead   Lead?       @relation("PortalUser", fields: [portalLeadId], references: [id])
+  portalLeadId String?     @unique
+
+  sessions      Session[]
+  auditLogs     AuditLog[]
+  assignedLeads Lead[]         @relation("LeadOwner")
+  createdLeads  Lead[]         @relation("LeadCreator")
+  tasksAssigned Task[]         @relation("TaskAssignee")
+  tasksCreated  Task[]         @relation("TaskCreator")
+  notifications Notification[]
+  leadActivities LeadActivity[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([roleId])
+  @@index([departmentId])
+}
+
+model Session {
+  id               String   @id @default(cuid())
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId           String
+  refreshTokenHash String
+  userAgent        String?
+  ipAddress        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ----------------------------------------------------------------------------
+// CRM
+// ----------------------------------------------------------------------------
+
+model LeadSource {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  channel   String?
+  isActive  Boolean    @default(true)
+  leads     Lead[]
+  campaigns Campaign[]
+  createdAt DateTime   @default(now())
+}
+
+model Campaign {
+  id          String         @id @default(cuid())
+  name        String
+  type        String
+  status      CampaignStatus @default(DRAFT)
+  serviceType ServiceType?
+  source      LeadSource?    @relation(fields: [sourceId], references: [id])
+  sourceId    String?
+  budget      Decimal?       @db.Decimal(12, 2)
+  spend       Decimal?       @db.Decimal(12, 2)
+  startDate   DateTime?
+  endDate     DateTime?
+  leads       Lead[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model CreativeAsset {
+  id        String   @id @default(cuid())
+  name      String
+  type      String // Image | Video | Brochure | Flyer | Template | Ad Copy | Landing Page
+  category  String?
+  url       String? // external link or S3 object key
+  tags      String[] @default([])
+  status    String   @default("DRAFT") // DRAFT | APPROVED | ARCHIVED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Lead {
+  id          String      @id @default(cuid())
+  /// Human-friendly reference, e.g. LD-2026-0001
+  reference   String      @unique
+
+  // Step 1 — Basic
+  name        String
+  phone       String
+  email       String?
+  gender      String?
+  country     String?
+  city        String?
+  dateOfBirth DateTime?
+
+  // Step 2 — Professional
+  profession         String?
+  experienceYears    Int?
+  currentEmployer    String?
+  currentCountry     String?
+  preferredDestination String?
+
+  // Step 3 — Service (NO "both")
+  serviceType ServiceType
+  urgency     Urgency?
+
+  // Step 4 — Source & assignment
+  source      LeadSource? @relation(fields: [sourceId], references: [id])
+  sourceId    String?
+  campaign    Campaign?   @relation(fields: [campaignId], references: [id])
+  campaignId  String?
+  tags        String[]    @default([])
+  remarks     String?
+
+  status   LeadStatus @default(NEW)
+  priority Priority   @default(MEDIUM)
+
+  owner       User?     @relation("LeadOwner", fields: [ownerId], references: [id])
+  ownerId     String?
+  createdBy   User?     @relation("LeadCreator", fields: [createdById], references: [id])
+  createdById String?
+
+  // Duplicate-detection keys
+  passport   String?
+  nationalId String?
+
+  /// Set true for legacy records that arrived as service_type='both'.
+  /// New records can NEVER set this; it exists only for migration triage.
+  legacyBothFlag Boolean @default(false)
+
+  nextFollowUpAt DateTime?
+  convertedAt    DateTime?
+  lostReason     String?
+
+  activities LeadActivity[]
+  case       ConsultancyCase?
+  student    AcademyStudent?
+  portalUser User?           @relation("PortalUser")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([serviceType])
+  @@index([ownerId])
+  @@index([phone])
+  @@index([email])
+}
+
+model LeadActivity {
+  id        String   @id @default(cuid())
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  leadId    String
+  type      String // call | whatsapp | email | meeting | demo | note | status_change
+  notes     String?
+  outcome   String?
+  scheduledAt DateTime?
+  completedAt DateTime?
+  actor     User?    @relation(fields: [actorId], references: [id])
+  actorId   String?
+  createdAt DateTime @default(now())
+
+  @@index([leadId])
+}
+
+// ----------------------------------------------------------------------------
+// CONSULTANCY / DOCUMENTATION
+// ----------------------------------------------------------------------------
+
+model ConsultancyCase {
+  id          String     @id @default(cuid())
+  reference   String     @unique // CC-2026-0001
+  lead        Lead       @relation(fields: [leadId], references: [id])
+  leadId      String     @unique
+  authority   String
+  profession  String?
+  status      CaseStatus @default(DOCUMENT_COLLECTION)
+  priority    Priority   @default(MEDIUM)
+  progressPct Int        @default(0)
+  assignedOfficerId String?
+  openedAt    DateTime   @default(now())
+  closedAt    DateTime?
+
+  documents        Document[]
+  authorityTracking AuthorityTracking?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([authority])
+}
+
+model Document {
+  id        String         @id @default(cuid())
+  case      ConsultancyCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId    String
+  category  String
+  fileUrl   String?
+  status    DocumentStatus @default(MISSING)
+  reviewerId String?
+  rejectionReason String?
+  expiresAt DateTime?
+  versions  DocumentVersion[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([caseId])
+}
+
+model DocumentVersion {
+  id         String   @id @default(cuid())
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId String
+  version    Int
+  fileUrl    String
+  uploadedById String?
+  createdAt  DateTime @default(now())
+}
+
+model AuthorityTracking {
+  id              String          @id @default(cuid())
+  case            ConsultancyCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId          String          @unique
+  authority       String
+  referenceNumber String?
+  status          AuthorityStatus @default(NOT_STARTED)
+  submissionDate  DateTime?
+  lastResponseAt  DateTime?
+  followUps       AuthorityFollowUp[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model AuthorityFollowUp {
+  id          String   @id @default(cuid())
+  tracking    AuthorityTracking @relation(fields: [trackingId], references: [id], onDelete: Cascade)
+  trackingId  String
+  type        String // email | call | portal | visit | client | escalation
+  dueAt       DateTime?
+  completedAt DateTime?
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@index([trackingId])
+}
+
+// ----------------------------------------------------------------------------
+// ACADEMY
+// ----------------------------------------------------------------------------
+
+model AcademyCourse {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  category    String?
+  profession  String?
+  level       String?
+  durationWeeks Int?
+  price       Decimal? @db.Decimal(12, 2)
+  isActive    Boolean  @default(true)
+  batches     AcademyBatch[]
+  students    AcademyStudent[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model AcademyFaculty {
+  id            String   @id @default(cuid())
+  name          String
+  specialization String?
+  experienceYears Int?
+  rating        Float?
+  isActive      Boolean  @default(true)
+  batches       AcademyBatch[]
+  createdAt     DateTime @default(now())
+}
+
+model AcademyBatch {
+  id            String      @id @default(cuid())
+  code          String      @unique
+  course        AcademyCourse @relation(fields: [courseId], references: [id])
+  courseId      String
+  faculty       AcademyFaculty? @relation(fields: [facultyId], references: [id])
+  facultyId     String?
+  startDate     DateTime?
+  endDate       DateTime?
+  timing        String?
+  seatLimit     Int         @default(0)
+  status        BatchStatus @default(UPCOMING)
+  students      AcademyStudent[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model AcademyStudent {
+  id           String        @id @default(cuid())
+  reference    String        @unique // ST-2026-0001
+  lead         Lead?         @relation(fields: [leadId], references: [id])
+  leadId       String?       @unique
+  name         String
+  course       AcademyCourse? @relation(fields: [courseId], references: [id], map: "student_course_fk")
+  courseId     String?
+  batch        AcademyBatch? @relation(fields: [batchId], references: [id])
+  batchId      String?
+  status       StudentStatus @default(ENROLLED)
+  progressPct  Int           @default(0)
+  attendancePct Int          @default(0)
+  enrolledAt   DateTime      @default(now())
+  certificateIssuedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([batchId])
+}
+
+// Extra relation: a course owns many students (kept separate from batch link).
+model DemoSession {
+  id              String   @id @default(cuid())
+  leadName        String
+  coordinatorId   String?
+  scheduledAt     DateTime?
+  outcome         String? // interested | not_interested | follow_up | enrolled | lost
+  likelihood      Int?
+  recommendedCourse String?
+  createdAt       DateTime @default(now())
+}
+
+// ----------------------------------------------------------------------------
+// ACCOUNTS
+// ----------------------------------------------------------------------------
+
+model Invoice {
+  id          String        @id @default(cuid())
+  number      String        @unique // INV-2026-0001
+  clientName  String
+  leadId      String?
+  amount      Decimal       @db.Decimal(12, 2)
+  gstAmount   Decimal       @default(0) @db.Decimal(12, 2)
+  status      InvoiceStatus @default(DRAFT)
+  issuedAt    DateTime?
+  dueAt       DateTime?
+  payments    Payment[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  reference String        @unique
+  payerName String
+  invoice   Invoice?      @relation(fields: [invoiceId], references: [id])
+  invoiceId String?
+  amount    Decimal       @db.Decimal(12, 2)
+  method    PaymentMethod
+  status    PaymentStatus @default(PENDING)
+  proofUrl  String?
+  paidAt    DateTime?
+  createdAt DateTime      @default(now())
+
+  @@index([invoiceId])
+}
+
+model Refund {
+  id          String       @id @default(cuid())
+  clientName  String
+  amount      Decimal      @db.Decimal(12, 2)
+  reason      String?
+  requestedById String?
+  status      RefundStatus @default(PENDING)
+  createdAt   DateTime     @default(now())
+  processedAt DateTime?
+}
+
+model AuthorityPayment {
+  id         String   @id @default(cuid())
+  clientName String
+  authority  String
+  type       String // Eligibility | Exam | License | DataFlow | Other
+  amount     Decimal  @db.Decimal(12, 2)
+  paidAt     DateTime?
+  /// Whether the fee paid to the authority has been recovered from the client.
+  recovered  Boolean  @default(false)
+  status     String   @default("PENDING") // PENDING | PAID | RECOVERED | CANCELLED
+  caseId     String?
+  createdAt  DateTime @default(now())
+}
+
+// ----------------------------------------------------------------------------
+// TASKS, NOTIFICATIONS, AUTOMATION, AUDIT, SETTINGS
+// ----------------------------------------------------------------------------
+
+model Task {
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  status      TaskStatus @default(NEW)
+  priority    Priority   @default(MEDIUM)
+  department  DepartmentName?
+  assignee    User?      @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  assigneeId  String?
+  createdBy   User?      @relation("TaskCreator", fields: [createdById], references: [id])
+  createdById String?
+  dueAt       DateTime?
+  completedAt DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([assigneeId])
+  @@index([status])
+}
+
+model Notification {
+  id        String              @id @default(cuid())
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  channel   NotificationChannel @default(IN_APP)
+  event     String
+  title     String
+  body      String?
+  readAt    DateTime?
+  createdAt DateTime            @default(now())
+
+  @@index([userId])
+}
+
+model AutomationRule {
+  id        String   @id @default(cuid())
+  name      String
+  trigger   String
+  // JSON definition of conditions + actions for the workflow builder.
+  definition Json
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  actor        User?    @relation(fields: [actorId], references: [id])
+  actorId      String?
+  action       String
+  resource     String
+  resourceId   String?
+  oldValue     Json?
+  newValue     Json?
+  reason       String?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  @@index([actorId])
+  @@index([resource])
+  @@index([createdAt])
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+}

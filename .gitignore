@@ -24,3 +24,6 @@ packages/db/prisma/*.db-journal
 
 # TypeScript incremental build cache
 *.tsbuildinfo
+
+# Portable Postgres data dir (embedded-postgres local runs)
+.pgdata/

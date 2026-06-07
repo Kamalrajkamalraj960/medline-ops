@@ -21,7 +21,8 @@
     "docker:down": "docker compose down"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "embedded-postgres": "^18.4.0-beta.17"
   },
   "engines": {
     "node": ">=20.0.0"

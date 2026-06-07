@@ -1,8 +1,11 @@
-import type { Config } from 'tailwindcss';
+const path = require('node:path');
 
-const config: Config = {
+// Content globs are ABSOLUTE (anchored to this file's directory) so Tailwind
+// scans the right files regardless of the process working directory.
+/** @type {import('tailwindcss').Config} */
+module.exports = {
   darkMode: 'class',
-  content: ['./src/**/*.{ts,tsx}'],
+  content: [path.join(__dirname, 'src/**/*.{ts,tsx,js,jsx,mdx}')],
   theme: {
     extend: {
       colors: {
@@ -32,5 +35,3 @@ const config: Config = {
   },
   plugins: [],
 };
-
-export default config;

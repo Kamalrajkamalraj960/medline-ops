@@ -180,6 +180,7 @@ model Lead {
   owner                User?            @relation("LeadOwner", fields: [ownerId], references: [id])
   source               LeadSource?      @relation(fields: [sourceId], references: [id])
   activities           LeadActivity[]
+  payments             Payment[]
   portalUser           User?            @relation("PortalUser")
 
   @@index([status])
@@ -302,6 +303,7 @@ model AcademyCourse {
   updatedAt     DateTime         @updatedAt
   batches       AcademyBatch[]
   students      AcademyStudent[]
+  payments      Payment[]
 }
 
 model AcademyFaculty {
@@ -349,6 +351,7 @@ model AcademyStudent {
   batch               AcademyBatch?  @relation(fields: [batchId], references: [id])
   lead                Lead?          @relation(fields: [leadId], references: [id])
   course              AcademyCourse? @relation(fields: [courseId], references: [id], map: "student_course_fk")
+  payments            Payment[]
 
   @@index([batchId])
 }
@@ -407,10 +410,13 @@ model Payment {
   rejectionReason   String?
   // Append-only status/verification trail. Stored as JSON to mirror the
   // embedded array the app reads/writes as `payment.history`.
-  history           Json          @default("[]")
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-  invoice           Invoice?      @relation(fields: [invoiceId], references: [id])
+  history           Json            @default("[]")
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  invoice           Invoice?        @relation(fields: [invoiceId], references: [id])
+  lead              Lead?           @relation(fields: [leadId], references: [id])
+  student           AcademyStudent? @relation(fields: [studentId], references: [id])
+  course            AcademyCourse?  @relation(fields: [courseId], references: [id])
 
   @@index([invoiceId])
   @@index([leadId])

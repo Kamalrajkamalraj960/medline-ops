@@ -59,7 +59,7 @@ async function loadUserContext(userId: string) {
   });
   return {
     ...user,
-    permissions: user.role.permissions.map((rp) => rp.permission.key),
+    permissions: user.role.permissions.map((rp: any) => rp.permission.key),
   };
 }
 
@@ -85,7 +85,7 @@ export const authService = {
     const accessToken = signAccessToken({ sub: user.id, role: user.role.name, email: user.email });
     const refreshToken = await issueTokens(user.id, meta);
 
-    const permissions = user.role.permissions.map((rp) => rp.permission.key);
+    const permissions = user.role.permissions.map((rp: any) => rp.permission.key);
     return {
       accessToken,
       refreshToken,

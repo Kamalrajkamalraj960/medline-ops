@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Load the repo-root .env first (Prisma uses it), then a local override.
+// Load the repo-root .env first, then a local override.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
@@ -17,7 +17,12 @@ export const env = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   isProd: process.env.NODE_ENV === 'production',
   port: Number(process.env.API_PORT ?? 4000),
+  // PostgreSQL (Supabase) connection strings. `databaseUrl` is the pooled
+  // connection used by the app at runtime; `directUrl` is the non-pooled
+  // connection Prisma uses for migrations / db push. Prisma reads these from
+  // process.env itself — they are surfaced here for fail-fast validation.
   databaseUrl: required('DATABASE_URL'),
+  directUrl: process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? '',
   jwt: {
     accessSecret: required('JWT_ACCESS_SECRET', 'dev-access-secret'),
     refreshSecret: required('JWT_REFRESH_SECRET', 'dev-refresh-secret'),

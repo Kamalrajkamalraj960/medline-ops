@@ -36,7 +36,7 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
       id: user.id,
       email: user.email,
       role: user.role.name,
-      permissions: user.role.permissions.map((rp) => rp.permission.key),
+      permissions: user.role.permissions.map((rp: any) => rp.permission.key),
     };
     next();
   } catch (err) {

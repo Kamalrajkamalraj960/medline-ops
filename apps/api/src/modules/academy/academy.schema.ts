@@ -9,9 +9,22 @@ export const createCourseSchema = z.object({
   level: z.string().optional(),
   durationWeeks: z.coerce.number().int().min(0).max(260).optional(),
   price: z.coerce.number().min(0).optional(),
+  thumbnailUrl: z.string().url().optional().or(z.literal('')),
+  learningObjectives: z.array(z.string().min(1)).optional(),
+  syllabus: z.string().optional(),
+  isActive: z.boolean().optional(),
 });
 export const updateCourseSchema = createCourseSchema.partial().extend({
-  isActive: z.boolean().optional(),
+  // `archived` is a convenience flag the catalog UI toggles; the service maps
+  // it onto archivedAt + isActive so archive/restore stays a single call.
+  archived: z.boolean().optional(),
+});
+
+export const listCoursesSchema = z.object({
+  search: z.string().optional(),
+  category: z.string().optional(),
+  status: z.enum(['all', 'active', 'inactive', 'archived']).default('all'),
+  sort: z.enum(['newest', 'oldest']).default('newest'),
 });
 
 // Faculty
@@ -75,6 +88,7 @@ export const listSchema = z.object({
 
 export type CreateCourseInput = z.infer<typeof createCourseSchema>;
 export type UpdateCourseInput = z.infer<typeof updateCourseSchema>;
+export type ListCoursesInput = z.infer<typeof listCoursesSchema>;
 export type CreateFacultyInput = z.infer<typeof createFacultySchema>;
 export type CreateBatchInput = z.infer<typeof createBatchSchema>;
 export type UpdateBatchInput = z.infer<typeof updateBatchSchema>;

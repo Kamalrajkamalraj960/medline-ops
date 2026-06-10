@@ -96,13 +96,33 @@ export interface CaseStage {
 export interface Course {
   id: string;
   name: string;
+  description: string | null;
   category: string | null;
   profession: string | null;
   level: string | null;
   durationWeeks: number | null;
-  price: string | null;
+  price: number | string | null;
+  thumbnailUrl: string | null;
+  learningObjectives: string[] | null;
+  syllabus: string | null;
   isActive: boolean;
+  archivedAt: string | null;
+  createdAt: string;
   _count: { batches: number; students: number };
+}
+
+export interface AcademyStats {
+  totalStudents: number;
+  activeStudents: number;
+  activeBatches: number;
+  upcomingBatches: number;
+  totalBatches: number;
+  courses: number;
+  activeCourses: number;
+  totalCourses: number;
+  faculty: number;
+  demos: number;
+  monthlyEnrollments: number;
 }
 
 export interface Faculty {
@@ -161,15 +181,52 @@ export interface Invoice {
   _count?: { payments: number };
 }
 
+export interface PaymentHistoryEntry {
+  action: string;
+  status?: string;
+  at: string;
+  byId?: string;
+  byName?: string;
+  note?: string;
+}
+
 export interface Payment {
   id: string;
   reference: string;
   payerName: string;
-  amount: string;
+  payerId?: string | null;
+  amount: number | string;
   method: string;
+  type: string;
   status: string;
+  transactionRef?: string | null;
+  installmentNumber?: number | null;
+  notes?: string | null;
+  proofUrl?: string | null;
+  paymentDate: string | null;
   paidAt: string | null;
-  invoice?: { number: string } | null;
+  verifiedAt?: string | null;
+  confirmedAt?: string | null;
+  rejectedAt?: string | null;
+  rejectionReason?: string | null;
+  leadId?: string | null;
+  studentId?: string | null;
+  courseId?: string | null;
+  history?: PaymentHistoryEntry[];
+  createdAt: string;
+  invoice?: { number: string; clientName?: string } | null;
+  lead?: { name: string; reference: string } | null;
+  student?: { name: string; reference: string } | null;
+  course?: { name: string } | null;
+}
+
+export interface PaymentStats {
+  totalPayments: number;
+  totalRevenue: number;
+  confirmedPayments: number;
+  confirmedAmount: number;
+  pendingVerificationCount: number;
+  pendingVerificationAmount: number;
 }
 
 export interface Refund {

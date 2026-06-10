@@ -24,7 +24,7 @@ router.get('/roles', authorize('role:view'), asyncHandler(async (_req, res) => {
       label: r.label,
       description: r.description,
       userCount: r._count.users,
-      permissions: r.permissions.map((p) => p.permission.key).sort(),
+      permissions: r.permissions.map((p: any) => p.permission.key).sort(),
     })),
   );
 }));

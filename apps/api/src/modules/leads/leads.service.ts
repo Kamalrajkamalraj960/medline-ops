@@ -2,10 +2,10 @@ import { prisma, type Prisma } from '@medline/db';
 import { HttpError } from '../../lib/http-error.js';
 import type { CreateLeadInput, ListLeadsInput, UpdateLeadInput } from './leads.schema.js';
 
-/** Generates the next LD-YYYY-#### reference for the given year. */
+/** Generates the next MED-YYYY-#### reference for the given year. */
 async function nextLeadReference(): Promise<string> {
   const year = new Date().getUTCFullYear();
-  const prefix = `LD-${year}-`;
+  const prefix = `MED-${year}-`;
   const last = await prisma.lead.findFirst({
     where: { reference: { startsWith: prefix } },
     orderBy: { reference: 'desc' },

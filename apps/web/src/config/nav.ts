@@ -17,8 +17,8 @@ export const NAV_BY_ROLE: Record<RoleName, NavItem[]> = {
   SUPER_ADMIN: [
     DASHBOARD,
     { label: 'CRM', href: '/crm', icon: 'Contact' },
-    { label: 'Leads', href: '/leads', icon: 'Users' },
     { label: 'Consultancy', href: '/consultancy', icon: 'FileCheck' },
+    { label: 'Authority Tracking', href: '/authorities', icon: 'Landmark' },
     { label: 'Academy', href: '/academy', icon: 'GraduationCap' },
     { label: 'Documents', href: '/documents', icon: 'FolderOpen' },
     { label: 'Accounts', href: '/accounts', icon: 'Wallet' },

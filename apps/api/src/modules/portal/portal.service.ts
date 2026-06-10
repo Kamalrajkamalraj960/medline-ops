@@ -54,8 +54,8 @@ export const portalService = {
     });
 
     const documents = lead.case?.documents ?? [];
-    const docsVerified = documents.filter((d) => d.status === 'VERIFIED').length;
-    const docsPending = documents.filter((d) => d.status !== 'VERIFIED').length;
+    const docsVerified = documents.filter((d: any) => d.status === 'VERIFIED').length;
+    const docsPending = documents.filter((d: any) => d.status !== 'VERIFIED').length;
 
     // Payment summary across this client's invoices.
     const invoices = await prisma.invoice.findMany({
@@ -63,7 +63,7 @@ export const portalService = {
       include: { payments: { where: { status: 'CONFIRMED' }, select: { amount: true } } },
     });
     const totalFee = invoices.reduce((s, i) => s + Number(i.amount) + Number(i.gstAmount), 0);
-    const totalPaid = invoices.reduce((s, i) => s + i.payments.reduce((p, x) => p + Number(x.amount), 0), 0);
+    const totalPaid = invoices.reduce((s: number, i: any) => s + i.payments.reduce((p: number, x: any) => p + Number(x.amount), 0), 0);
 
     const isConsultancy = lead.serviceType === 'consultancy';
     const currentStep = lead.case ? journeyStep(lead.case.status) : lead.student?.status === 'COMPLETED' ? 8 : 3;

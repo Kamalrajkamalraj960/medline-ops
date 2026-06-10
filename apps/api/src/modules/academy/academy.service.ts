@@ -2,8 +2,8 @@ import { prisma, type Prisma } from '@medline/db';
 import { HttpError } from '../../lib/http-error.js';
 import type {
   CreateBatchInput, CreateCourseInput, CreateDemoInput, CreateFacultyInput,
-  EnrollStudentInput, ListInput, UpdateBatchInput, UpdateCourseInput, UpdateDemoInput,
-  UpdateStudentInput,
+  EnrollStudentInput, ListCoursesInput, ListInput, UpdateBatchInput, UpdateCourseInput,
+  UpdateDemoInput, UpdateStudentInput,
 } from './academy.schema.js';
 
 function seq(prefix: string, current: string | null): string {
@@ -31,19 +31,79 @@ async function nextBatchCode(): Promise<string> {
   return seq(prefix, last?.code ?? null);
 }
 
+/** Drops empty-string optional fields so they don't overwrite with blanks. */
+function cleanCourseInput<T extends Record<string, unknown>>(input: T): T {
+  const out = { ...input };
+  if (out.thumbnailUrl === '') delete out.thumbnailUrl;
+  return out;
+}
+
 export const academyService = {
   // ---- Courses ----
-  async listCourses() {
+  async listCourses(query: ListCoursesInput) {
+    const where: Prisma.AcademyCourseWhereInput = {};
+    if (query.search) {
+      where.OR = [
+        { name: { contains: query.search, mode: 'insensitive' } },
+        { category: { contains: query.search, mode: 'insensitive' } },
+        { profession: { contains: query.search, mode: 'insensitive' } },
+      ];
+    }
+    if (query.category && query.category !== 'all') where.category = query.category;
+    if (query.status === 'active') Object.assign(where, { isActive: true, archivedAt: null });
+    else if (query.status === 'inactive') Object.assign(where, { isActive: false, archivedAt: null });
+    else if (query.status === 'archived') where.archivedAt = { not: null };
+
     return prisma.academyCourse.findMany({
-      orderBy: { createdAt: 'desc' },
+      where,
+      orderBy: { createdAt: query.sort === 'oldest' ? 'asc' : 'desc' },
       include: { _count: { select: { batches: true, students: true } } },
     });
   },
   async createCourse(input: CreateCourseInput) {
-    return prisma.academyCourse.create({ data: input });
+    return prisma.academyCourse.create({ data: cleanCourseInput(input) });
   },
   async updateCourse(id: string, input: UpdateCourseInput) {
-    return prisma.academyCourse.update({ where: { id }, data: input });
+    const { archived, ...rest } = input;
+    const data: Prisma.AcademyCourseUpdateInput = cleanCourseInput(rest) as Prisma.AcademyCourseUpdateInput;
+    if (archived === true) {
+      data.archivedAt = new Date();
+      data.isActive = false;
+    } else if (archived === false) {
+      data.archivedAt = null;
+    }
+    return prisma.academyCourse.update({ where: { id }, data });
+  },
+  async deleteCourse(id: string) {
+    const course = await prisma.academyCourse.findUnique({
+      where: { id },
+      include: { _count: { select: { batches: true, students: true } } },
+    });
+    if (!course) throw HttpError.notFound('Course not found');
+    if (course._count.students > 0 || course._count.batches > 0) {
+      throw HttpError.conflict('Course has enrolled students or batches — archive it instead of deleting.');
+    }
+    await prisma.academyCourse.delete({ where: { id } });
+    return { id };
+  },
+  async duplicateCourse(id: string) {
+    const src = await prisma.academyCourse.findUnique({ where: { id } });
+    if (!src) throw HttpError.notFound('Course not found');
+    return prisma.academyCourse.create({
+      data: {
+        name: `${src.name} (Copy)`,
+        description: src.description ?? undefined,
+        category: src.category ?? undefined,
+        profession: src.profession ?? undefined,
+        level: src.level ?? undefined,
+        durationWeeks: src.durationWeeks ?? undefined,
+        price: src.price ?? undefined,
+        thumbnailUrl: src.thumbnailUrl ?? undefined,
+        learningObjectives: src.learningObjectives ?? undefined,
+        syllabus: src.syllabus ?? undefined,
+        isActive: false,
+      },
+    });
   },
 
   // ---- Faculty ----
@@ -153,17 +213,25 @@ export const academyService = {
   async stats() {
     const now = new Date();
     const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const [totalStudents, activeStudents, activeBatches, upcomingBatches, courses, faculty, demos, monthlyEnrollments] =
-      await Promise.all([
-        prisma.academyStudent.count(),
-        prisma.academyStudent.count({ where: { status: 'ACTIVE' } }),
-        prisma.academyBatch.count({ where: { status: 'ACTIVE' } }),
-        prisma.academyBatch.count({ where: { status: 'UPCOMING' } }),
-        prisma.academyCourse.count({ where: { isActive: true } }),
-        prisma.academyFaculty.count({ where: { isActive: true } }),
-        prisma.demoSession.count(),
-        prisma.academyStudent.count({ where: { enrolledAt: { gte: monthStart } } }),
-      ]);
-    return { totalStudents, activeStudents, activeBatches, upcomingBatches, courses, faculty, demos, monthlyEnrollments };
+    const [
+      totalStudents, activeStudents, activeBatches, upcomingBatches, totalBatches,
+      courses, totalCourses, faculty, demos, monthlyEnrollments,
+    ] = await Promise.all([
+      prisma.academyStudent.count(),
+      prisma.academyStudent.count({ where: { status: 'ACTIVE' } }),
+      prisma.academyBatch.count({ where: { status: 'ACTIVE' } }),
+      prisma.academyBatch.count({ where: { status: 'UPCOMING' } }),
+      prisma.academyBatch.count(),
+      prisma.academyCourse.count({ where: { isActive: true, archivedAt: null } }),
+      prisma.academyCourse.count(),
+      prisma.academyFaculty.count({ where: { isActive: true } }),
+      prisma.demoSession.count(),
+      prisma.academyStudent.count({ where: { enrolledAt: { gte: monthStart } } }),
+    ]);
+    // `courses` = active courses (kept for existing dashboard); `totalCourses`/`totalBatches` new.
+    return {
+      totalStudents, activeStudents, activeBatches, upcomingBatches, totalBatches,
+      courses, activeCourses: courses, totalCourses, faculty, demos, monthlyEnrollments,
+    };
   },
 };

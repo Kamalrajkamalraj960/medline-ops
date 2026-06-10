@@ -10,13 +10,20 @@ import type {
 async function nextReference(model: 'case' | 'lead'): Promise<string> {
   const year = new Date().getUTCFullYear();
   const prefix = model === 'case' ? `CC-${year}-` : `LD-${year}-`;
-  const table = model === 'case' ? prisma.consultancyCase : prisma.lead;
-  // @ts-expect-error both delegates share findFirst with a reference field
-  const last = await table.findFirst({
-    where: { reference: { startsWith: prefix } },
-    orderBy: { reference: 'desc' },
-    select: { reference: true },
-  });
+  // Branch instead of a shared delegate variable: Prisma's per-model delegate
+  // types don't unify into a single callable signature.
+  const last =
+    model === 'case'
+      ? await prisma.consultancyCase.findFirst({
+          where: { reference: { startsWith: prefix } },
+          orderBy: { reference: 'desc' },
+          select: { reference: true },
+        })
+      : await prisma.lead.findFirst({
+          where: { reference: { startsWith: prefix } },
+          orderBy: { reference: 'desc' },
+          select: { reference: true },
+        });
   const lastNum = last ? Number(last.reference.slice(prefix.length)) : 0;
   return `${prefix}${String(lastNum + 1).padStart(4, '0')}`;
 }

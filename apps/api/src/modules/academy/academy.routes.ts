@@ -5,8 +5,8 @@ import { authorize } from '../../middleware/authorize.js';
 import { validateBody } from '../../middleware/validate.js';
 import {
   createBatchSchema, createCourseSchema, createDemoSchema, createFacultySchema,
-  enrollStudentSchema, listSchema, updateBatchSchema, updateCourseSchema, updateDemoSchema,
-  updateStudentSchema,
+  enrollStudentSchema, listCoursesSchema, listSchema, updateBatchSchema, updateCourseSchema,
+  updateDemoSchema, updateStudentSchema,
 } from './academy.schema.js';
 import { academyService } from './academy.service.js';
 import { dispatch } from '../automation/automation.engine.js';
@@ -18,8 +18,8 @@ router.get('/stats', authorize('dashboard:view'), asyncHandler(async (_req, res)
 }));
 
 // ---- Courses ----
-router.get('/courses', authorize('course:view'), asyncHandler(async (_req, res) => {
-  res.json(await academyService.listCourses());
+router.get('/courses', authorize('course:view'), asyncHandler(async (req, res) => {
+  res.json(await academyService.listCourses(listCoursesSchema.parse(req.query)));
 }));
 router.post('/courses', authorize('course:create'), validateBody(createCourseSchema), asyncHandler(async (req, res) => {
   const c = await academyService.createCourse(req.body);
@@ -27,7 +27,19 @@ router.post('/courses', authorize('course:create'), validateBody(createCourseSch
   res.status(201).json(c);
 }));
 router.patch('/courses/:id', authorize('course:edit'), validateBody(updateCourseSchema), asyncHandler(async (req, res) => {
-  res.json(await academyService.updateCourse(req.params.id, req.body));
+  const c = await academyService.updateCourse(req.params.id, req.body);
+  await audit({ action: 'COURSE_UPDATED', resource: 'course', resourceId: c.id, newValue: req.body, req });
+  res.json(c);
+}));
+router.post('/courses/:id/duplicate', authorize('course:create'), asyncHandler(async (req, res) => {
+  const c = await academyService.duplicateCourse(req.params.id);
+  await audit({ action: 'COURSE_DUPLICATED', resource: 'course', resourceId: c.id, newValue: { sourceId: req.params.id }, req });
+  res.status(201).json(c);
+}));
+router.delete('/courses/:id', authorize('course:delete'), asyncHandler(async (req, res) => {
+  await academyService.deleteCourse(req.params.id);
+  await audit({ action: 'COURSE_DELETED', resource: 'course', resourceId: req.params.id, req });
+  res.status(204).end();
 }));
 
 // ---- Faculty ----

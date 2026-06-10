@@ -8,21 +8,19 @@
     "apps/*"
   ],
   "scripts": {
-    "db:generate": "npm run generate -w @medline/db",
-    "db:migrate": "npm run migrate -w @medline/db",
-    "db:push": "npm run push -w @medline/db",
+    "db:generate": "prisma generate --schema packages/db/prisma/schema.prisma",
+    "db:push": "prisma db push --schema packages/db/prisma/schema.prisma",
+    "db:migrate": "prisma migrate dev --schema packages/db/prisma/schema.prisma",
+    "db:deploy": "prisma migrate deploy --schema packages/db/prisma/schema.prisma",
+    "db:studio": "prisma studio --schema packages/db/prisma/schema.prisma",
     "db:seed": "npm run seed -w @medline/db",
-    "db:studio": "npm run studio -w @medline/db",
     "dev:api": "npm run dev -w @medline/api",
     "dev:web": "npm run dev -w @medline/web",
     "dev": "concurrently -n api,web -c blue,magenta \"npm:dev:api\" \"npm:dev:web\"",
-    "build": "npm run build -w @medline/db && npm run build -w @medline/api && npm run build -w @medline/web",
-    "docker:up": "docker compose up -d",
-    "docker:down": "docker compose down"
+    "build": "npm run build -w @medline/db && npm run build -w @medline/api && npm run build -w @medline/web"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2",
-    "embedded-postgres": "^18.4.0-beta.17"
+    "concurrently": "^9.1.2"
   },
   "engines": {
     "node": ">=20.0.0"

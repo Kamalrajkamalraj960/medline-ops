@@ -7,24 +7,29 @@ export const serviceTypeSchema = z.enum(['consultancy', 'academy'], {
 });
 
 export const createLeadSchema = z.object({
-  // Step 1
+  // Step 1 — Basic Info
   name: z.string().min(2),
   phone: z.string().min(5),
+  whatsapp: z.string().optional(),
   email: z.string().email().optional().or(z.literal('').transform(() => undefined)),
   gender: z.string().optional(),
   country: z.string().optional(),
   city: z.string().optional(),
   dateOfBirth: z.coerce.date().optional(),
-  // Step 2
+  nationality: z.string().optional(),
+  // Step 2 — Professional
   profession: z.string().optional(),
   experienceYears: z.coerce.number().int().min(0).max(60).optional(),
   currentEmployer: z.string().optional(),
+  highestQualification: z.string().optional(),
   currentCountry: z.string().optional(),
   preferredDestination: z.string().optional(),
-  // Step 3
+  // Step 3 — Service
   serviceType: serviceTypeSchema,
   urgency: z.enum(['IMMEDIATE', 'WITHIN_3_MONTHS', 'WITHIN_6_MONTHS', 'JUST_EXPLORING']).optional(),
-  // Step 4
+  // Step 4 — Source & Assign
+  leadSource: z.string().optional(),
+  sourceDetails: z.string().optional(),
   sourceId: z.string().optional(),
   campaignId: z.string().optional(),
   tags: z.array(z.string()).optional(),

@@ -1,7 +1,6 @@
 import bcrypt from 'bcryptjs';
-import { PrismaClient, RoleName, DepartmentName } from '@prisma/client';
-
-const prisma = new PrismaClient();
+// The shared client handles env loading (DATABASE_URL/DIRECT_URL) on import.
+import { prisma, type RoleName, type DepartmentName } from '../src/index.js';
 
 // ---------------------------------------------------------------------------
 // Permission catalogue. Keys are "<resource>:<action>".
@@ -27,6 +26,7 @@ const VIEW_ALL = RESOURCES.map((r) => key(r, 'view'));
 const ROLE_PERMISSIONS: Record<Exclude<RoleName, 'SUPER_ADMIN'>, string[]> = {
   OPERATIONS_MANAGER: [
     ...VIEW_ALL,
+    key('lead', 'create'), key('lead', 'edit'), key('lead', 'assign'),
     key('task', 'create'), key('task', 'edit'), key('task', 'assign'),
     key('report', 'export'), key('analytics', 'view'),
   ],
@@ -296,6 +296,6 @@ async function main() {
 main()
   .catch((e) => {
     console.error(e);
-    process.exit(1);
+    process.exitCode = 1;
   })
   .finally(() => prisma.$disconnect());
